@@ -16,21 +16,31 @@ type SqlQuery struct {
 	db              *gorm.DB
 	params          []interface{}
 
-	rows    *sql.Rows
-	total   int
-	columns []string
-	length  int
-	Error   error
+	rows        *sql.Rows
+	total       int
+	columns     []string
+	length      int
+	Error       error
+	initialized bool
 }
 
 func (q *SqlQuery) init() error {
+	if q.initialized {
+		return q.Error
+	}
 	if q.query == "" {
 		q.query, q.Error = (&file.File{Name: q.fileName}).Content()
 	}
+
 	return q.Error
 }
 
 func (q *SqlQuery) setRows() error {
+	if q.initialized {
+		return q.Error
+	}
+	q.initialized = true
+
 	if q.rows, q.Error = q.db.Raw(q.query, q.params...).Rows(); q.Error != nil {
 		return q.Error
 	}
@@ -69,7 +79,13 @@ func (q *SqlQuery) makeResultReceiver() []interface{} {
 	return result
 }
 
-func (q *SqlQuery) fetch(obj interface{}) (bool, error) {
+func (q *SqlQuery) Fetch(obj interface{}) (bool, error) {
+	if q.Error = q.init(); q.Error != nil {
+		return false, q.Error
+	} else if q.Error = q.setRows(); q.Error != nil {
+		return false, q.Error
+	}
+
 	if next := q.rows.Next(); next {
 		switch v := obj.(type) {
 		case *map[string]interface{}:
@@ -96,7 +112,7 @@ func (q *SqlQuery) fetchAll(obj interface{}) ([]interface{}, error) {
 		list = []interface{}{}
 	)
 
-	for next, q.Error = q.fetch(obj); q.Error == nil && next; next, q.Error = q.fetch(obj) {
+	for next, q.Error = q.Fetch(obj); q.Error == nil && next; next, q.Error = q.Fetch(obj) {
 		list = append(list, reflect.ValueOf(obj).Elem().Interface())
 	}
 
@@ -109,12 +125,6 @@ func (q *SqlQuery) ToList() ([]map[string]interface{}, error) {
 		rows   = []interface{}{}
 	)
 
-	if q.Error = q.init(); q.Error != nil {
-		return result, q.Error
-	} else if q.Error = q.setRows(); q.Error != nil {
-		return result, q.Error
-	}
-
 	if rows, q.Error = q.fetchAll(&map[string]interface{}{}); q.Error != nil {
 		return result, q.Error
 	} else {
@@ -126,14 +136,9 @@ func (q *SqlQuery) ToList() ([]map[string]interface{}, error) {
 }
 
 func (q *SqlQuery) First(obj interface{}) error {
-	if q.Error = q.init(); q.Error != nil {
-		return q.Error
-	} else if q.Error = q.setRows(); q.Error != nil {
-		return q.Error
-	}
 
 	var next bool
-	if next, q.Error = q.fetch(obj); q.Error != nil {
+	if next, q.Error = q.Fetch(obj); q.Error != nil {
 		return q.Error
 	} else if !next {
 		return errors.New("record not found")
@@ -152,11 +157,6 @@ func (q *SqlQuery) Scan(obj interface{}) error {
 }
 
 func (q *SqlQuery) Write(w http.ResponseWriter, start, end string, obj interface{}) error {
-	if q.Error = q.init(); q.Error != nil {
-		return q.Error
-	} else if q.Error = q.setRows(); q.Error != nil {
-		return q.Error
-	}
 
 	if start == "" {
 		start = "["
@@ -171,7 +171,7 @@ func (q *SqlQuery) Write(w http.ResponseWriter, start, end string, obj interface
 		next bool
 		out  []byte
 	)
-	for next, q.Error = q.fetch(obj); q.Error == nil && next; next, q.Error = q.fetch(obj) {
+	for next, q.Error = q.Fetch(obj); q.Error == nil && next; next, q.Error = q.Fetch(obj) {
 		if out, q.Error = json.Marshal(obj); q.Error != nil {
 			return q.Error
 		} else {
