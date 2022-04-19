@@ -75,7 +75,7 @@ func (q *SqlQuery) scanRowToMap() (map[string]interface{}, error) {
 					value[k] = val
 					continue
 				} else if u, err := uuid.FromString(string(v)); err == nil {
-					value[k] = u
+					value[k] = u.String()
 					continue
 				}
 
