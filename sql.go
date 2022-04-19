@@ -82,11 +82,13 @@ func (q *SqlQuery) scanRowToMap() (map[string]interface{}, error) {
 				var f float64
 				if json.Unmarshal(v, &f) == nil {
 					value[k] = f
+					continue
 				}
 
 				var i interface{}
 				if json.Unmarshal(v, &i) == nil {
 					value[k] = f
+					continue
 				}
 			}
 		}
