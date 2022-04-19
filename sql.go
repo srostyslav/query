@@ -8,6 +8,7 @@ import (
 	"reflect"
 
 	"github.com/jinzhu/gorm"
+	uuid "github.com/satori/go.uuid"
 	"github.com/srostyslav/file"
 )
 
@@ -22,6 +23,7 @@ type SqlQuery struct {
 	length      int
 	Error       error
 	initialized bool
+	parseByte   bool
 }
 
 func (q *SqlQuery) init() error {
@@ -64,6 +66,31 @@ func (q *SqlQuery) scanRowToMap() (map[string]interface{}, error) {
 	for i := 0; i < q.length; i++ {
 		k := q.columns[i]
 		val := *(current[i]).(*interface{})
+
+		if q.parseByte {
+			switch v := val.(type) {
+			case []byte:
+
+				if v != nil {
+					value[k] = val
+					continue
+				} else if u, err := uuid.FromString(string(v)); err == nil {
+					value[k] = u
+					continue
+				}
+
+				var f float64
+				if json.Unmarshal(v, &f) == nil {
+					value[k] = f
+				}
+
+				var i interface{}
+				if json.Unmarshal(v, &i) == nil {
+					value[k] = f
+				}
+			}
+		}
+
 		value[k] = val
 	}
 
@@ -189,10 +216,10 @@ func (q *SqlQuery) Total() int {
 	return q.total
 }
 
-func NewSqlFromFile(fileName string, db *gorm.DB, params ...interface{}) *SqlQuery {
-	return &SqlQuery{fileName: fileName, db: db, params: params}
+func NewSqlFromFile(fileName string, parseByte bool, db *gorm.DB, params ...interface{}) *SqlQuery {
+	return &SqlQuery{fileName: fileName, db: db, params: params, parseByte: parseByte}
 }
 
-func NewSql(query string, db *gorm.DB, params ...interface{}) *SqlQuery {
-	return &SqlQuery{query: query, db: db, params: params}
+func NewSql(query string, parseByte bool, db *gorm.DB, params ...interface{}) *SqlQuery {
+	return &SqlQuery{query: query, db: db, params: params, parseByte: parseByte}
 }
