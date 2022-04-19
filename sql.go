@@ -71,7 +71,7 @@ func (q *SqlQuery) scanRowToMap() (map[string]interface{}, error) {
 			switch v := val.(type) {
 			case []byte:
 
-				if v != nil {
+				if v == nil {
 					value[k] = val
 					continue
 				} else if u, err := uuid.FromString(string(v)); err == nil {
