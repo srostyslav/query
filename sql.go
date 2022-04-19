@@ -87,7 +87,7 @@ func (q *SqlQuery) scanRowToMap() (map[string]interface{}, error) {
 
 				var i interface{}
 				if json.Unmarshal(v, &i) == nil {
-					value[k] = f
+					value[k] = i
 					continue
 				}
 			}
