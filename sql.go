@@ -6,32 +6,55 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"sync"
 
 	"github.com/jinzhu/gorm"
 	uuid "github.com/satori/go.uuid"
 	"github.com/srostyslav/file"
 )
 
+var localStorage = struct {
+	m    *sync.Mutex
+	Data map[string]string
+}{
+	m:    &sync.Mutex{},
+	Data: map[string]string{},
+}
+
 type SqlQuery struct {
 	fileName, query string
 	db              *gorm.DB
 	params          []interface{}
-
-	rows        *sql.Rows
-	total       int
-	columns     []string
-	length      int
-	Error       error
-	initialized bool
-	parseByte   bool
+	rows            *sql.Rows
+	total           int
+	columns         []string
+	length          int
+	Error           error
+	initialized     bool
+	parseByte       bool
 }
 
 func (q *SqlQuery) init() error {
+
 	if q.initialized {
 		return q.Error
 	}
+
 	if q.query == "" {
-		q.query, q.Error = (&file.File{Name: q.fileName}).Content()
+		localStorage.m.Lock()
+		defer localStorage.m.Unlock()
+
+		if query, ok := localStorage.Data[q.fileName]; ok {
+
+			q.query = query
+			if q.query == "" {
+				q.Error = errors.New("query is empty")
+			}
+
+		} else {
+			q.query, q.Error = (&file.File{Name: q.fileName}).Content()
+			localStorage.Data[q.fileName] = q.query
+		}
 	}
 
 	return q.Error
